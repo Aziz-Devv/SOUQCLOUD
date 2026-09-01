@@ -6,11 +6,14 @@ import crypto from 'crypto';
  */
 
 const BASE_URL = process.env.WORKER_URL || 'http://127.0.0.1:8787';
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://gtnvxlolmsojkqzofjtc.supabase.co';
+const SUPABASE_ANON_KEY = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0bnZ4bG9sbXNvamtxem9manRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDk0NTcsImV4cCI6MjEwMzA4NTQ1N30.FHtnzdqYn_JXC_-1pPmo6rfHyikhOkzGL_Zt1FGtM5U';
 const PADDLE_SECRET = process.env.PADDLE_WEBHOOK_SECRET || 'ci_test_webhook_secret_key_12345';
 
 console.log('====================================================');
 console.log('SOUQCLOUD LINUX WORKER RUNTIME PROOF SUITE');
 console.log('Target Worker URL:', BASE_URL);
+console.log('Supabase API URL :', SUPABASE_URL);
 console.log('====================================================\n');
 
 let passCount = 0;
@@ -84,16 +87,38 @@ await testEndpoint('2. Marketing Root /', '/', {
 await testEndpoint('3. Auth /login', '/login', { host: 'souqcloud.com', expectedStatuses: [200] });
 await testEndpoint('4. Auth /register', '/register', { host: 'souqcloud.com', expectedStatuses: [200] });
 
-// 5. GAP 1 & GAP 4: Custom Domain Tenant Resolution + Live Supabase DB Query
-// shop.brand.com is mapped in public.custom_domains to store "متجر العطور"
-await testEndpoint('5. Custom Domain Live Resolution (Host: shop.brand.com)', '/', {
-  host: 'shop.brand.com',
+// Dynamic Discovery of Custom Domain Fixture from Development DB
+let discoveredCustomDomain = 'shop.brand.com';
+let discoveredStoreName = 'متجر العطور';
+
+try {
+  const dbRes = await fetch(`${SUPABASE_URL}/rest/v1/custom_domains?status=eq.ACTIVE&select=hostname,store_id,stores(id,name,handle)&limit=1`, {
+    headers: {
+      'apikey': SUPABASE_ANON_KEY,
+      'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
+    },
+  });
+  if (dbRes.ok) {
+    const data = await dbRes.json();
+    if (data && data.length > 0) {
+      discoveredCustomDomain = data[0].hostname;
+      discoveredStoreName = data[0].stores?.name || 'متجر العطور';
+      console.log(`[Discovery] Active Dev Custom Domain found: ${discoveredCustomDomain} -> "${discoveredStoreName}"`);
+    }
+  }
+} catch (err) {
+  console.warn('[Discovery] Supabase dynamic query fallback to default fixture:', err.message);
+}
+
+// 5. GAP 1 & GAP 4: Custom Domain Dynamic Tenant Resolution + Live Supabase DB Query + Header Tampering
+await testEndpoint(`5. Custom Domain Live Resolution (Host: ${discoveredCustomDomain})`, '/', {
+  host: discoveredCustomDomain,
   headers: {
     'x-tenant-host': 'malicious-injected.com', // Must be stripped by proxy.ts
     'x-tenant-store-id': 'unauthorized-uuid',
   },
   expectedStatuses: [200],
-  assertBodyContains: 'متجر العطور',
+  assertBodyContains: discoveredStoreName,
 });
 
 // 6. GAP 1: Subdomain Tenant Resolution + Live Supabase DB Query
@@ -114,13 +139,14 @@ await testEndpoint('11. Dashboard /app/products Auth Guard', '/app/products', { 
 await testEndpoint('12. Dashboard /app/orders Auth Guard', '/app/orders', { host: 'app.souqcloud.com', expectedStatuses: [200, 307, 308] });
 
 // 13. GAP 5: Paddle Valid Webhook Signature Lifecycle
+const testEventId = `evt_ci_gap_${Date.now()}`;
 const validTimestamp = Math.floor(Date.now() / 1000);
 const validPayload = JSON.stringify({
-  event_id: 'evt_ci_deterministic_001',
+  event_id: testEventId,
   event_type: 'subscription.created',
   occurred_at: new Date().toISOString(),
   data: {
-    id: 'sub_ci_test_001',
+    id: `sub_ci_test_${Date.now()}`,
     status: 'active',
     items: [],
   },
@@ -128,7 +154,7 @@ const validPayload = JSON.stringify({
 const validHmac = crypto.createHmac('sha256', PADDLE_SECRET).update(`${validTimestamp}:${validPayload}`).digest('hex');
 const validSignatureHeader = `ts=${validTimestamp};h1=${validHmac}`;
 
-await testEndpoint('13. Paddle Valid Webhook Signature Verification', '/api/webhooks/billing/paddle', {
+await testEndpoint('13. Paddle Valid Webhook Signature & Event Processing', '/api/webhooks/billing/paddle', {
   method: 'POST',
   body: validPayload,
   headers: {
@@ -138,16 +164,27 @@ await testEndpoint('13. Paddle Valid Webhook Signature Verification', '/api/webh
   expectedStatuses: [200],
 });
 
-// 14. Paddle Security Rejection: Missing Signature
-await testEndpoint('14. Paddle Webhook (Missing Signature Rejection)', '/api/webhooks/billing/paddle', {
+// 14. Paddle Duplicate Event Idempotency Check (re-sending same event_id)
+await testEndpoint('14. Paddle Duplicate Event Idempotency', '/api/webhooks/billing/paddle', {
+  method: 'POST',
+  body: validPayload,
+  headers: {
+    'Content-Type': 'application/json',
+    'Paddle-Signature': validSignatureHeader,
+  },
+  expectedStatuses: [200],
+});
+
+// 15. Paddle Security Rejection: Missing Signature
+await testEndpoint('15. Paddle Webhook (Missing Signature Rejection)', '/api/webhooks/billing/paddle', {
   method: 'POST',
   body: JSON.stringify({ event: 'test' }),
   headers: { 'Content-Type': 'application/json' },
   expectedStatuses: [400],
 });
 
-// 15. Paddle Security Rejection: Invalid Signature
-await testEndpoint('15. Paddle Webhook (Invalid Signature Rejection)', '/api/webhooks/billing/paddle', {
+// 16. Paddle Security Rejection: Invalid Signature
+await testEndpoint('16. Paddle Webhook (Invalid Signature Rejection)', '/api/webhooks/billing/paddle', {
   method: 'POST',
   body: JSON.stringify({ event: 'test' }),
   headers: {

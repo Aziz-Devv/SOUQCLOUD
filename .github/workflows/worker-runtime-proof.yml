@@ -28,17 +28,32 @@ jobs:
         run: npx @opennextjs/cloudflare build
         env:
           NEXT_PUBLIC_APP_URL: http://localhost:8787
-          NEXT_PUBLIC_ROOT_DOMAIN: souqcloud.com
-          NEXT_PUBLIC_SUPABASE_URL: https://gtnvxlolmsojkqzofjtc.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0bnZ4bG9sbXNvamtxem9manRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDk0NTcsImV4cCI6MjEwMzA4NTQ1N30.FHtnzdqYn_JXC_-1pPmo6rfHyikhOkzGL_Zt1FGtM5U
+          NEXT_PUBLIC_ROOT_DOMAIN: ${{ vars.NEXT_PUBLIC_ROOT_DOMAIN || 'souqcloud.com' }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://gtnvxlolmsojkqzofjtc.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0bnZ4bG9sbXNvamtxem9manRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDk0NTcsImV4cCI6MjEwMzA4NTQ1N30.FHtnzdqYn_JXC_-1pPmo6rfHyikhOkzGL_Zt1FGtM5U' }}
           PADDLE_ENVIRONMENT: sandbox
-          PADDLE_WEBHOOK_SECRET: ci_test_webhook_secret_key_12345
 
       - name: Verify Worker Output Artifacts
         run: |
           test -f .open-next/worker.js || { echo "Worker bundle missing!"; exit 1; }
           test -d .open-next/assets || { echo "Worker assets missing!"; exit 1; }
           echo "Worker artifacts verified successfully."
+
+      - name: Generate Temporary CI Worker Environment Bindings
+        run: |
+          cat <<EOF > .dev.vars
+          NEXT_PUBLIC_APP_URL=http://localhost:8787
+          NEXT_PUBLIC_ROOT_DOMAIN=${{ vars.NEXT_PUBLIC_ROOT_DOMAIN || 'souqcloud.com' }}
+          NEXT_PUBLIC_SUPABASE_URL=${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://gtnvxlolmsojkqzofjtc.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY=${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0bnZ4bG9sbXNvamtxem9manRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDk0NTcsImV4cCI6MjEwMzA4NTQ1N30.FHtnzdqYn_JXC_-1pPmo6rfHyikhOkzGL_Zt1FGtM5U' }}
+          PADDLE_ENVIRONMENT=sandbox
+          PADDLE_WEBHOOK_SECRET=${{ secrets.PADDLE_WEBHOOK_SECRET || 'ci_test_webhook_secret_key_12345' }}
+          SUPABASE_SECRET_KEY=${{ secrets.SUPABASE_SECRET_KEY || '' }}
+          CLOUDFLARE_R2_ACCESS_KEY_ID=${{ secrets.CLOUDFLARE_R2_ACCESS_KEY_ID || '' }}
+          CLOUDFLARE_R2_SECRET_ACCESS_KEY=${{ secrets.CLOUDFLARE_R2_SECRET_ACCESS_KEY || '' }}
+          CLOUDFLARE_R2_ACCOUNT_ID=${{ secrets.CLOUDFLARE_R2_ACCOUNT_ID || '' }}
+          EOF
+          echo "Temporary .dev.vars created securely."
 
       - name: Start Cloudflare Worker Runtime (workerd)
         run: |
@@ -56,4 +71,12 @@ jobs:
         run: node tests/worker-smoke-tests.mjs
         env:
           WORKER_URL: http://127.0.0.1:8787
-          PADDLE_WEBHOOK_SECRET: ci_test_webhook_secret_key_12345
+          NEXT_PUBLIC_SUPABASE_URL: ${{ vars.NEXT_PUBLIC_SUPABASE_URL || 'https://gtnvxlolmsojkqzofjtc.supabase.co' }}
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: ${{ vars.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0bnZ4bG9sbXNvamtxem9manRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDk0NTcsImV4cCI6MjEwMzA4NTQ1N30.FHtnzdqYn_JXC_-1pPmo6rfHyikhOkzGL_Zt1FGtM5U' }}
+          PADDLE_WEBHOOK_SECRET: ${{ secrets.PADDLE_WEBHOOK_SECRET || 'ci_test_webhook_secret_key_12345' }}
+
+      - name: Cleanup Temporary Environment Bindings
+        if: always()
+        run: |
+          rm -f .dev.vars
+          echo "Temporary .dev.vars deleted."

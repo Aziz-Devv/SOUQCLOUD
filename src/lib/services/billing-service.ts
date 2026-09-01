@@ -255,7 +255,14 @@ export async function processWebhookEvent(
   }
 
   // 3. Execute PostgreSQL Atomic Webhook Transaction RPC
-  const supabase = await createClient();
+  let supabase;
+  try {
+    const { createAdminClient } = await import('@/lib/supabase/admin');
+    supabase = createAdminClient();
+  } catch {
+    supabase = await createClient();
+  }
+
   const { data, error } = await supabase.rpc('process_paddle_billing_webhook', {
     p_event_id: eventId,
     p_event_type: eventType,
