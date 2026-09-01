@@ -3,6 +3,7 @@ import { Metadata } from 'next';
 import Link from 'next/link';
 import {
   resolveStorefrontByHandle,
+  resolveStorefrontByCustomDomain,
   getStorefrontPage,
   getStorefrontProducts,
 } from '@/lib/services/storefront-service';
@@ -10,18 +11,19 @@ import { ThemeSectionRenderer } from '@/components/storefront/theme-section-rend
 
 export async function generateMetadata(): Promise<Metadata> {
   const headerList = await headers();
-  const tenantHandle = headerList.get('x-tenant-handle');
+  const tenantHandle = headerList.get('x-tenant-handle') || '';
+  const tenantHost = headerList.get('x-tenant-host') || '';
 
-  if (!tenantHandle) {
-    return {
-      title: 'SOUQCLOUD | منصة التجارة الإلكترونية السحابية',
-    };
+  let store = null;
+  if (tenantHandle) {
+    store = await resolveStorefrontByHandle(tenantHandle);
+  } else if (tenantHost) {
+    store = await resolveStorefrontByCustomDomain(tenantHost);
   }
 
-  const store = await resolveStorefrontByHandle(tenantHandle);
   if (!store) {
     return {
-      title: 'المتجر غير متاح | SOUQCLOUD',
+      title: 'SOUQCLOUD | منصة التجارة الإلكترونية السحابية',
     };
   }
 
@@ -40,10 +42,18 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function StorefrontHomePage() {
   const headerList = await headers();
-  const tenantHandle = headerList.get('x-tenant-handle');
+  const tenantHandle = headerList.get('x-tenant-handle') || '';
+  const tenantHost = headerList.get('x-tenant-host') || '';
+
+  let store = null;
+  if (tenantHandle) {
+    store = await resolveStorefrontByHandle(tenantHandle);
+  } else if (tenantHost) {
+    store = await resolveStorefrontByCustomDomain(tenantHost);
+  }
 
   // Apex or direct dev preview without tenant
-  if (!tenantHandle) {
+  if (!store) {
     return (
       <main className="flex min-h-screen flex-col items-center justify-center p-8 text-center bg-canvas">
         <div className="max-w-md w-full p-8 rounded-card bg-surface border border-border-subtle shadow-card space-y-4">
@@ -62,11 +72,6 @@ export default async function StorefrontHomePage() {
         </div>
       </main>
     );
-  }
-
-  const store = await resolveStorefrontByHandle(tenantHandle);
-  if (!store) {
-    return null; // Handled by StorefrontLayout
   }
 
   const [page, products] = await Promise.all([
