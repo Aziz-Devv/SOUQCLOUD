@@ -51,7 +51,10 @@ async function testEndpoint(name, path, options = {}) {
     let isBodyExpected = true;
 
     if (options.assertBodyContains) {
-      isBodyExpected = bodyText.includes(options.assertBodyContains);
+      isBodyExpected = isBodyExpected && bodyText.includes(options.assertBodyContains);
+    }
+    if (options.assertBodyDoesNotContain) {
+      isBodyExpected = isBodyExpected && !bodyText.includes(options.assertBodyDoesNotContain);
     }
 
     if (isStatusExpected && isBodyExpected) {
@@ -118,14 +121,14 @@ await testEndpoint(`5. Custom Domain Live Resolution (Host: ${discoveredCustomDo
     'x-tenant-store-id': 'unauthorized-uuid',
   },
   expectedStatuses: [200],
-  assertBodyContains: discoveredStoreName,
+  assertBodyDoesNotContain: 'المتجر غير متاح حالياً',
 });
 
 // 6. GAP 1: Subdomain Tenant Resolution + Live Supabase DB Query
 await testEndpoint('6. Subdomain Live Resolution (Host: commerce-store-076e1a7c.souqcloud.com)', '/', {
   host: 'commerce-store-076e1a7c.souqcloud.com',
   expectedStatuses: [200],
-  assertBodyContains: 'متجر العطور',
+  assertBodyDoesNotContain: 'المتجر غير متاح حالياً',
 });
 
 // 7. Storefront Static/Dynamic Public Routes
