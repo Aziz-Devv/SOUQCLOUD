@@ -1,0 +1,37 @@
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+
+# Testing & Coverage
+/coverage
+
+# Next.js & OpenNext build artifacts
+/.next/
+/.open-next/
+/out/
+/build
+
+# Cloudflare & Wrangler
+/.wrangler/
+
+# Scratch & Temporary Files
+/scratch/
+/supabase/.temp/
+*.log
+
+# Misc
+.DS_Store
+*.pem
+
+# Local Environment Secrets (STRICTLY IGNORED)
+.env
+.env*.local
+.env.local
+
+# Vercel
+.vercel
+
+# TypeScript
+*.tsbuildinfo
+next-env.d.ts

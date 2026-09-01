@@ -1,0 +1,57 @@
+name: Linux Cloudflare Worker Runtime Proof
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+
+jobs:
+  worker-proof:
+    name: OpenNext Build & Linux Worker Runtime Verification
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js 22
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install Dependencies
+        run: npm ci
+
+      - name: Build Next.js 16 via OpenNext
+        run: npx @opennextjs/cloudflare build
+        env:
+          NEXT_PUBLIC_APP_URL: http://localhost:8787
+          NEXT_PUBLIC_ROOT_DOMAIN: souqcloud.com
+          NEXT_PUBLIC_SUPABASE_URL: https://gtnvxlolmsojkqzofjtc.supabase.co
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder-publishable-key
+          PADDLE_ENVIRONMENT: sandbox
+
+      - name: Verify Worker Output Artifacts
+        run: |
+          test -f .open-next/worker.js || { echo "Worker bundle missing!"; exit 1; }
+          test -d .open-next/assets || { echo "Worker assets missing!"; exit 1; }
+          echo "Worker artifacts verified successfully."
+
+      - name: Start Cloudflare Worker Runtime (workerd)
+        run: |
+          npx wrangler dev --port 8787 --ip 127.0.0.1 --show-interactive-dev-session=false &
+          echo "Waiting for Worker to start on port 8787..."
+          for i in {1..30}; do
+            if curl -s http://127.0.0.1:8787/api/health > /dev/null; then
+              echo "Cloudflare Worker runtime is ready!"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Execute HTTP Runtime Smoke Tests
+        run: node tests/worker-smoke-tests.mjs
+        env:
+          WORKER_URL: http://127.0.0.1:8787
