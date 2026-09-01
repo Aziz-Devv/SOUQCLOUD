@@ -30,8 +30,9 @@ jobs:
           NEXT_PUBLIC_APP_URL: http://localhost:8787
           NEXT_PUBLIC_ROOT_DOMAIN: souqcloud.com
           NEXT_PUBLIC_SUPABASE_URL: https://gtnvxlolmsojkqzofjtc.supabase.co
-          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.placeholder-publishable-key
+          NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imd0bnZ4bG9sbXNvamtxem9manRjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODc1MDk0NTcsImV4cCI6MjEwMzA4NTQ1N30.FHtnzdqYn_JXC_-1pPmo6rfHyikhOkzGL_Zt1FGtM5U
           PADDLE_ENVIRONMENT: sandbox
+          PADDLE_WEBHOOK_SECRET: ci_test_webhook_secret_key_12345
 
       - name: Verify Worker Output Artifacts
         run: |
@@ -55,3 +56,4 @@ jobs:
         run: node tests/worker-smoke-tests.mjs
         env:
           WORKER_URL: http://127.0.0.1:8787
+          PADDLE_WEBHOOK_SECRET: ci_test_webhook_secret_key_12345

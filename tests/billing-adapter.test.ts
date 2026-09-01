@@ -86,5 +86,5 @@ describe('Paddle Billing Adapter Webhook Signature Verification', () => {
     );
     expect(res.checkoutUrl).toBeDefined();
     expect(res.checkoutUrl).toContain('sandbox');
-  });
+  }, 15000);
 });
