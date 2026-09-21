@@ -2,38 +2,40 @@ Document: Next.js Structure
 Version: 1.0
 Status: Draft
 Owner: Aziz
-Last Updated: 2026-08-23
+Last Updated: 2026-09-21
 Depth: Full Spec
 Dependencies: docs/01-architecture/architecture-overview.md, docs/01-architecture/architecture-rules.md
-Related Documents: docs/03-modules/storefront-rendering.md, docs/03-modules/dashboard-shell.md, docs/05-infrastructure/cloudflare-setup.md
-Decisions: Next.js 16 App Router deployed on Node.js container runtime; proxy.ts on Node.js runtime for lightweight tenant routing; fronted by Cloudflare Edge for DNS, TLS/SSL, WAF, CDN caching, and cache purge; Paddle billing webhooks and storefront order endpoints.
+Related Documents: docs/01-architecture/decisions/ADR-006-hosting-and-runtime-architecture.md, docs/03-modules/storefront-rendering.md, docs/03-modules/dashboard-shell.md, docs/05-infrastructure/cloudflare-setup.md
+Decisions: Next.js 16 App Router application deployed through OpenNext to the Cloudflare Workers runtime (workerd) as primary production application hosting platform (ADR-006); proxy.ts executing on Cloudflare Workers for edge tenant-host extraction, header sanitization, and request routing; Cloudflare global edge and Worker routing; Supabase PostgreSQL with Grants & RLS; Paddle billing webhooks and storefront order endpoints.
 Open Questions: None
 
 # Next.js Application Structure & Runtime Strategy
 
 ## 1. Runtime Architecture & Deployment Boundary
 
-The system operates across a clear, tiered runtime boundary:
+The system unifies global edge networking and application compute into Cloudflare Workers: incoming requests flow from Cloudflare Edge / Worker Route → SOUQCLOUD Worker → Next.js 16 application deployed through OpenNext → executes in Cloudflare Workers runtime (workerd).
+
+OpenNext functions as the deployment/build adapter compiling the Next.js 16 App Router application into a standalone Worker bundle (`.open-next/worker.js`) and static assets (`.open-next/assets`). Execution occurs within the Cloudflare Workers isolate-based runtime (`workerd`), eliminating external application servers or containers.
 
 ```text
 Internet
    ↓
-Cloudflare Edge
-   ├── DNS
-   ├── TLS / SSL
-   ├── WAF
-   ├── CDN
-   ├── Edge caching
-   └── Cache purge
+Cloudflare Global Edge & Worker Routing
+   ├── DNS (Wildcard & Custom Hostnames via Cloudflare for SaaS)
+   ├── TLS 1.3 / SSL Termination & WAF
+   ├── Global CDN Caching & Edge Cache Invalidation
+   └── Worker Route Traffic Interception
    ↓
-Next.js Application
+SOUQCLOUD Worker (Cloudflare Workers runtime: workerd)
    ↓
-proxy.ts
-   └── Node.js runtime
+proxy.ts (Edge tenant-host extraction, header sanitization, and route rewriting)
    ↓
-Routes / Server Components / Server Actions
+Next.js 16 App Router (deployed through OpenNext build output)
+   ├── React Server Components (RSC) Streaming
+   ├── Server Actions
+   └── API Route Handlers
    ↓
-Supabase / PostgreSQL / Application Services
+Supabase / PostgreSQL / External Services (R2, Paddle)
 ```
 
 ---
@@ -72,7 +74,7 @@ src/
 │   │
 │   └── globals.css                 # Base Design system CSS variables
 │
-├── proxy.ts                        # Next.js 16 Network Proxy on Node.js Runtime (Tenant Routing)
+├── proxy.ts                        # Next.js 16 Network Proxy on Cloudflare Workers Runtime (Tenant Routing & Header Sanitization)
 │
 ├── components/                     # Reusable UI component libraries
 │   ├── ui/                         # Design system primitives (buttons, modals, tables)
@@ -93,11 +95,11 @@ src/
 
 ## 3. Next.js 16 `proxy.ts` Routing & Tenant Resolution
 
-`proxy.ts` executes within the Next.js application on the **Node.js runtime** as a lightweight request proxy/router:
-1. **Hostname Extraction**: Inspects the incoming `Host` header (`shop.souqcloud.com` vs `app.souqcloud.com`).
-2. **Dashboard Routing**: If hostname is `app.souqcloud.com`, rewrites internal path to `/(dashboard)/app/...`.
-3. **Storefront Routing**: If hostname is a store subdomain or custom domain, resolves `store_id` using an in-memory/KV cache (avoiding runtime database lookups in proxy path) and injects `x-tenant-store-id: <uuid>`.
-4. **Data Isolation**: Heavy database queries, user session validation, and authorization execute strictly in downstream Server Components and Server Actions.
+`proxy.ts` executes within the Next.js 16 application deployed through OpenNext to the **Cloudflare Workers runtime (workerd)** as a lightweight request proxy/router:
+1. **Hostname Extraction & Header Sanitization**: Inspects incoming `Host` header (`shop.souqcloud.com` vs `app.souqcloud.com` vs `shop.brand.com`) and unconditionally strips untrusted client-supplied `x-tenant-*` headers to prevent header injection attacks.
+2. **Dashboard Routing**: If hostname matches `app.souqcloud.com`, rewrites internal path to `/(dashboard)/app/...`.
+3. **Storefront Routing & Internal Header Injection**: For store subdomains or custom domains, injects sanitized internal headers (`x-tenant-host` / `x-tenant-handle`) and rewrites internal path to `/(storefront)/...` without executing heavy runtime database lookups in the proxy path.
+4. **Authoritative Tenant Resolution & Data Isolation**: Authoritative custom domain tenant resolution executes downstream via Supabase RPC (`public.resolve_store_by_custom_domain(hostname)`). Heavy database queries, user session validation, and authorization execute strictly in downstream Server Components and Server Actions.
 
 ---
 

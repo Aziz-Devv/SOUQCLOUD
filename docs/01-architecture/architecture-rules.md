@@ -2,11 +2,11 @@ Document: Architecture Rules
 Version: 1.0
 Status: Draft
 Owner: Aziz
-Last Updated: 2026-08-23
+Last Updated: 2026-09-18
 Depth: Full Spec
 Dependencies: docs/00-product/product-principles.md, docs/01-architecture/architecture-overview.md
-Related Documents: docs/01-architecture/multi-tenancy.md, docs/01-architecture/security-authz.md, docs/01-architecture/identity-and-membership-model.md
-Decisions: Core architectural invariants, Order persistence precedence, Store Order Modes, Paddle platform billing isolation, composite foreign keys, and integer calculation rules locked.
+Related Documents: docs/01-architecture/multi-tenancy.md, docs/01-architecture/security-authz.md, docs/01-architecture/identity-and-membership-model.md, docs/01-architecture/decisions/ADR-006-hosting-and-runtime-architecture.md
+Decisions: Core architectural invariants, Order persistence precedence, Store Order Modes, Paddle platform billing isolation, composite foreign keys, integer calculation rules, and Rule 8 edge runtime routing on Cloudflare Workers (ADR-006) locked.
 Open Questions: None
 
 # Architecture Rules & Constraints
@@ -44,5 +44,5 @@ This document establishes the hard technical rules and invariants governing the 
 ### Rule 7: Orders Historical Snapshot Immutability
 * Placed orders capture an immutable snapshot of line items (title, variant title, SKU, unit price, quantity, total price, tax snapshot, shipping snapshot, customer details, and delivery notes). Catalog edits must never mutate historical order line records.
 
-### Rule 8: Next.js 16 `proxy.ts` Lightweight Routing
-* `proxy.ts` executes within the Next.js Node.js runtime and must remain lightweight, resolving tenant `store_id` via an in-memory/KV cache and avoiding heavy runtime database lookups in the proxy path.
+### Rule 8: Next.js 16 `proxy.ts` Edge Routing & Boundary Security
+* `proxy.ts` executes within the Next.js 16 application deployed through OpenNext to the Cloudflare Workers runtime (workerd) and must remain lightweight. It inspects the incoming `Host` header, unconditionally strips untrusted client-supplied `x-tenant-*` headers to prevent header injection attacks, and routes requests without executing heavy runtime database lookups in the proxy path. Authoritative tenant resolution executes downstream through the Supabase resolution boundary.

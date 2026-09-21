@@ -52,6 +52,7 @@ High-level system topology, multi-tenancy model, security, and architectural dec
   * [ADR-003](01-architecture/decisions/ADR-003-schema-driven-theme-engine.md) — Schema-Driven Theme Engine & Page Lifecycle.
   * [ADR-004](01-architecture/decisions/ADR-004-phase-1-payment-strategy.md) — Phase 1 Platform Subscription Billing (Paddle) & Provider Adapter Architecture.
   * [ADR-005](01-architecture/decisions/ADR-005-commerce-state-machine-and-idempotency.md) — Storefront Order Submission, Merchant Order Lifecycle & WhatsApp Dispatch.
+  * [ADR-006](01-architecture/decisions/ADR-006-hosting-and-runtime-architecture.md) — Hosting & Runtime Architecture: Next.js 16 on Cloudflare Workers via OpenNext.
 
 ### [Phase 02 — Database & Entities](02-database/schema-overview.md)
 Database schema definitions, conventions, and entity specifications:

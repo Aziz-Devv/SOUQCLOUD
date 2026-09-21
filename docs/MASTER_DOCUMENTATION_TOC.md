@@ -54,6 +54,7 @@ Project map — links to every doc below. First file any agent or human reads.
 | `domain-model.md` | Full Spec — how a request maps to a tenant via hostname (`store.yourplatform.com`), tenant resolution flow |
 | `error-handling.md` | Full Spec — shared error taxonomy (Validation, Authorization, Not Found, Conflict, Rate Limit, Internal) |
 | `decisions/ADR-001-*.md ...` | Full Spec — one ADR per major decision, including identity/membership model, tenancy strategy, theme schema, payment strategy, commerce state machine |
+| `decisions/ADR-006-hosting-and-runtime-architecture.md` | Full Spec — Primary Application Hosting & Runtime: Next.js 16 on Cloudflare Workers via OpenNext |
 
 ## /docs/02-database/
 | File | Depth |
